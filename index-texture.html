@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title></title>
+    <style>
+        body {
+            background-color: grey;
+        }
+
+        #renderCanvas {
+            width: 640px;
+            height: 480px;
+        }
+    </style>
+
+    <script id="vertexShader" type="x-shader/x-vertex">
+        attribute vec3 aVertexPosition; 
+        
+        void main(){ 
+            gl_Position = vec4(aVertexPosition, 1.0);
+         }
+    </script>
+
+    <script id="fragmentShader" type="x-shader/x-fragment">
+        precision mediump float;
+        
+        void main(){ 
+            gl_FragColor = vec4(1.0,0.0, 0.0, 1.0);
+        }
+    </script>
+
+
+    <script type="text/javascript">
+        var gl = null;
+        var vertices = [
+            -0.5, -0.5, 1.0,
+            -0.5, 0.5, 1.0,
+            0.5, 0.5, 1.0,
+            0.5, -0.5, 1.0
+        ];
+
+        var indices = [
+            0,1,2,
+            2,3,0
+        ];
+
+        var shaderProgram = null;
+
+        var shaders = {
+            vertexShader: null,
+            fragmentShader: null
+        };
+
+        var buffers = {
+            vertexBuffer: null,
+            indexBuffer: null
+        };
+
+        var attributes = {
+            position: null
+        };
+
+        function start() {
+            var canvas = document.getElementById("renderCanvas");
+            gl = canvas.getContext('webgl');
+
+            if (!gl) {
+                alert("Unable to initialize webgl. Your browser or machine might not support it.");
+            }
+
+            shaders.vertexShader = loadShader(gl.VERTEX_SHADER, "vertexShader");
+            shaders.fragmentShader = loadShader(gl.FRAGMENT_SHADER, "fragmentShader");
+
+            shaderProgram = gl.createProgram();
+            gl.attachShader(shaderProgram, shaders.vertexShader);
+            gl.attachShader(shaderProgram, shaders.fragmentShader);
+            gl.linkProgram(shaderProgram);
+
+            if(!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)){
+                alert("Failed to setup shaders.");
+            }
+
+            gl.useProgram(shaderProgram);
+
+            attributes.position = gl.getAttribLocation(shaderProgram, "aVertexPosition");
+
+            gl.enableVertexAttribArray(attributes.position);
+            bindBuffers();
+
+            requestAnimationFrame(draw);
+        }
+
+        function loadShader(type, shaderScript) {
+            var shader = gl.createShader(type);
+            var shaderSource = document.getElementById(shaderScript).innerText;
+            gl.shaderSource(shader, shaderSource);
+            gl.compileShader(shader);
+
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                alert("Error compiling shader: " + gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+
+            return shader;
+        }
+
+        function bindBuffers(){
+            buffers.vertexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.vertexBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+            buffers.indexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indexBuffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices),gl.STATIC_DRAW);
+        }
+
+        function draw(){
+            
+            // white color
+            gl.clearColor(1.0, 1.0, 1.0, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.vertexBuffer);
+            gl.vertexAttribPointer(attributes.position, 3, gl.FLOAT, false, 0,0);
+
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indexBuffer);
+            gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+        }
+    </script>
+</head>
+
+<body onload="start()">
+    <canvas id="renderCanvas"></canvas>
+</body>
+
+</html>
