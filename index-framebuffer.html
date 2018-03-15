@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title></title>
+    <style>
+        body {
+            background-color: grey;
+        }
+
+        #renderCanvas {
+            width: 640px;
+            height: 480px;
+        }
+    </style>
+
+    <script id="vertexShader" type="x-shader/x-vertex">
+        attribute vec3 aVertexPosition; 
+        attribute vec2 aTexCoords; 
+        
+        varying vec2 vTexCoords; 
+        
+        void main(){ 
+            gl_Position = vec4(aVertexPosition,1.0);
+            vTexCoords = aTexCoords; 
+        }
+    </script>
+
+    <script id="fragmentShader" type="x-shader/x-fragment">
+        precision mediump float;
+        
+        varying vec2 vTexCoords; 
+        
+        uniform sampler2D uTexture; 
+        
+        void main(){ 
+            gl_FragColor = texture2D(uTexture, vTexCoords);
+         }
+    </script>
+
+
+    <script type="text/javascript">
+        var gl = null,
+            canvas = null;
+        var vertices = [
+            -0.5, -0.5, 1.0,
+            -0.5, 0.5, 1.0,
+            0.5, 0.5, 1.0,
+            0.5, -0.5, 1.0
+        ];
+
+        var indices = [
+            0, 1, 2,
+            2, 3, 0
+        ];
+
+        var texCoords = [
+            0, 1,
+            0, 0,
+            1, 0,
+            1, 1
+        ]
+
+        var shaderProgram = null;
+
+        var shaders = {
+            vertexShader: null,
+            fragmentShader: null
+        };
+
+        var buffers = {
+            vertexBuffer: null,
+            indexBuffer: null,
+            texCoordsBuffer: null
+        };
+
+        var attributes = {
+            position: null,
+            texCoords: null
+        };
+
+        var mainTexture = null;
+        var textures = [];
+        var frameBuffers = [];
+        var image;
+
+        function start() {
+            canvas = document.getElementById("renderCanvas");
+            gl = canvas.getContext('webgl');
+
+            if (!gl) {
+                alert("Unable to initialize webgl. Your browser or machine might not support it.");
+            }
+
+            shaders.vertexShader = loadShader(gl.VERTEX_SHADER, "vertexShader");
+            shaders.fragmentShader = loadShader(gl.FRAGMENT_SHADER, "fragmentShader");
+
+            shaderProgram = gl.createProgram();
+            gl.attachShader(shaderProgram, shaders.vertexShader);
+            gl.attachShader(shaderProgram, shaders.fragmentShader);
+            gl.linkProgram(shaderProgram);
+
+            if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+                alert("Failed to setup shaders.");
+            }
+
+            gl.useProgram(shaderProgram);
+
+            attributes.position = gl.getAttribLocation(shaderProgram, "aVertexPosition");
+            attributes.texCoords = gl.getAttribLocation(shaderProgram, "aTexCoords");
+
+            gl.enableVertexAttribArray(attributes.position);
+            gl.enableVertexAttribArray(attributes.texCoords);
+            bindBuffers();
+            mainTexture = createTexture();
+            // create blue pixel while we wait to load
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+                new Uint8Array([0, 0, 255, 255]));
+
+            image = new Image();
+            image.src = 'cat.png';
+            image.addEventListener('load', function () {
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+                gl.generateMipmap(gl.TEXTURE_2D);
+
+                onImageLoad();
+                draw();
+            });
+
+            function onImageLoad(){
+                for(var i = 0; i < 2; i++){
+                    var texture = createTexture();
+                    textures.push(texture);
+
+                    gl.texImage2D( gl.TEXTURE_2D, 0, gl.RGBA, image.width, image.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+                    // Create a framebuffer
+                    var fbo = gl.createFramebuffer();
+                    frameBuffers.push(fbo);
+                    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+
+                    // Attach a texture to it.
+                    gl.framebufferTexture2D( gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+                }
+            }
+
+            window.requestAnimationFrame(draw);
+        }
+
+        function loadShader(type, shaderScript) {
+            var shader = gl.createShader(type);
+            var shaderSource = document.getElementById(shaderScript).innerText;
+            gl.shaderSource(shader, shaderSource);
+            gl.compileShader(shader);
+
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                alert("Error compiling shader: " + gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+
+            return shader;
+        }
+
+        function bindBuffers() {
+            buffers.vertexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.vertexBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+            buffers.indexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indexBuffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+
+            buffers.texCoordsBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.texCoordsBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(texCoords), gl.STATIC_DRAW);
+        }
+
+        function draw() {
+
+            // white color
+            gl.clearColor(1.0, 1.0, 1.0, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.vertexBuffer);
+            gl.vertexAttribPointer(attributes.position, 3, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.texCoordsBuffer);
+            gl.vertexAttribPointer(attributes.texCoords, 2, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indexBuffer);
+
+            gl.bindTexture(gl.TEXTURE_2D, mainTexture);
+
+            var count = 0;
+            for(var i = 0; i < frameBuffers.length; i++){
+                // make this the framebuffer we are rendering to.
+                gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffers[i]);
+
+                // Tell webgl the viewport setting needed for framebuffer.
+                gl.viewport(0, 0, image.width, image.height);
+
+                gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+
+                gl.bindTexture(gl.TEXTURE_2D, textures[count%2]);
+
+                ++count;
+            }
+
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+           
+        }
+
+        function createTexture() {
+            texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+
+            // Set the parameters so we can render any size image.
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+
+
+            return texture;
+        }
+    </script>
+</head>
+
+<body onload="start()">
+    <canvas id="renderCanvas"></canvas>
+</body>
+
+</html>
